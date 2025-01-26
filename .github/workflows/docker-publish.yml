@@ -98,7 +98,7 @@ jobs:
               semantic=$(echo $all_versions | cut -d ' ' -f 1)
               major=$(echo $semantic | cut -d '.' -f 1)
               release=$(echo $all_versions | cut -d ' ' -f 2)
-              commit="$(echo $all_versions | cut -d ' ' -f 3 | tr -d 'r')+patch"
+              commit=$(echo $all_versions | cut -d ' ' -f 3 | tr -d 'r')
               image=$(echo $tag | cut -d ':' -f 1)
               for version in $major $semantic "${semantic}.$release" $commit latest; do
                 echo $image:$version
