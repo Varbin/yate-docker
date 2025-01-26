@@ -57,23 +57,15 @@ ENV LD_LIBRARY_PATH=/usr/local/lib
 CMD ["/usr/local/bin/yate", "-vv"]
 
 # Depending on your configuration, you may not need all ports or even more.
-# IAX
-EXPOSE 4569/udp
-# SIP
-EXPOSE 5060/udp
-EXPOSE 5060/tcp
-EXPOSE 5061/tcp
-# H.323 (disabled by default)
-EXPOSE 1719/udp
-# (S)RTP
-EXPOSE 16384-32768/udp
-# SNMP (Monitoring)
-EXPOSE 161/udp
-# MGCP
-EXPOSE 2427/udp
+#
+#      IAX      SIP               SIP (TLS) H.323    S(RTP)
+EXPOSE 4569/udp 5060/udp 5060/tcp 5061/tcp  1719/udp 16384-32768/udp \
+       161/udp 2427/udp
+#      SNMP    MGCP
 
-LABEL org.opencontainers.image.title="Yate"
-LABEL org.opencontainers.image.source=https://github.com/varbin/yate-docker
-LABEL org.opencontainers.image.description="Yet another telephony exchange in a box."
-LABEL org.opencontainers.image.licenses="GPL-2.0"
+LABEL \
+    org.opencontainers.image.title="Yate" \
+    org.opencontainers.image.source=https://github.com/varbin/yate-docker \
+    org.opencontainers.image.description="Yet another telephony exchange in a box." \
+    org.opencontainers.image.licenses="GPL-2.0"
 
