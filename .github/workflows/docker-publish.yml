@@ -91,14 +91,13 @@ jobs:
         run: |
           set -e
           for tag in $DOCKER_METADATA_OUTPUT_TAGS; do
-              docker run --rm $tag yate --version
               versions=$(docker run --rm $tag yate --version 2>&1 | cut -d ' ' -f2,4 | tr ' ' '\n' | tr -d 'r')    
               image=$(echo $tag | cut -d ':' -f 1)
               for version in $versions latest; do
+                echo $image:$version
                 docker tag $tag $image:$version
                 docker push $image:$version
               done
-            done
           done
 
       # Sign the resulting Docker image digest except on PRs.
