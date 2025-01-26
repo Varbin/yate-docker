@@ -51,7 +51,7 @@ RUN apt-get update && apt-get install -y \
     libopus0 libtheora0 libspeex1 libopencore-amrnb0 libogg0 libx264-164 libgsm1 libopencore-amrnb0 libtiff6  \
     libasound2 libsctp1 libcapi20-3 libusb-1.0-0 \
     telnet ca-certificates \
-    --no-install-recommends
+    --no-install-recommends && rm -rf /var/lib/apt/lists/*
 COPY --from=yate-build /usr/local/ /usr/local
 ENV LD_LIBRARY_PATH=/usr/local/lib
 CMD ["/usr/local/bin/yate", "-vv"]
