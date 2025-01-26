@@ -88,11 +88,13 @@ jobs:
       # Push with name and hash from container
       - name: push
         if: github.event_name != 'pull_request'
+        env:
+          digest: ${{ steps.build-and-push.outputs.digest }}
         run: |
           set -e
           for tag in $DOCKER_METADATA_OUTPUT_TAGS; do
-              docker run --rm $tag yate --version
-              versions=$(docker run --rm $tag yate --version 2>&1 | cut -d ' ' -f2,4 | tr ' ' '\n' | tr -d 'r')    
+              docker run --rm $digest yate --version
+              versions=$(docker run --rm $digest yate --version 2>&1 | cut -d ' ' -f2,4 | tr ' ' '\n' | tr -d 'r')    
               image=$(echo $tag | cut -d ':' -f 1)
               for version in $versions latest; do
                 echo $image:$version
