@@ -72,6 +72,7 @@ EXPOSE 161/udp
 # MGCP
 EXPOSE 2427/udp
 
+LABEL org.opencontainers.image.title="Yate"
 LABEL org.opencontainers.image.source=https://github.com/varbin/yate-docker
 LABEL org.opencontainers.image.description="Yet another telephony exchange in a box."
 LABEL org.opencontainers.image.licenses="GPL-2.0"
