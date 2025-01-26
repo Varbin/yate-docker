@@ -1,0 +1,209 @@
+From 6f336a336abfafcea1e21f85259c0e528ddef47d Mon Sep 17 00:00:00 2001
+From: Harald Welte <laforge@osmocom.org>
+Date: Sun, 27 Feb 2022 22:01:37 +0100
+Subject: [PATCH 1/5] q931: sendSetupAck: Don't encode a BRI channel selection
+ in PRI
+
+If yate is operating in the 'network' role of a PRI interface,
+it must send a valid ChannelID InformationElement in the SETUP ACK.
+
+However, current yate code is encoding the channel selection field
+of said information element wrong, as it unconditionally looks up
+the s_dict_channelIDSelect_BRI (instead of _PRI).
+
+This fixes a regression introduced in 2009 in the following commit:
+
+commit 05b717e0b94ca682a40c7685ef9b9442a6c1820a
+Author: paulc <paulc@acf43c95-373e-0410-b603-e72c3f656dc1>
+Date:   Mon Mar 2 18:51:30 2009 +0000
+
+ISDN BRI support, most Andrei's (andrei@null.ro) work.
+Fixes and new features throughout the signalling engine.
+it-svn-id: http://yate.null.ro/svn/yate/trunk@2505 acf43c95-373e-0410-b603-e72c3f656dc1
+---
+ libs/ysig/q931.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/libs/ysig/q931.cpp b/libs/ysig/q931.cpp
+index c3bdac7a..ffa404d7 100644
+--- a/libs/ysig/q931.cpp
++++ b/libs/ysig/q931.cpp
+@@ -1741,7 +1741,7 @@ bool ISDNQ931Call::sendSetupAck()
+     ISDNQ931Message* msg = new ISDNQ931Message(ISDNQ931Message::SetupAck,this);
+     if (!m_channelIDSent) {
+ 	m_data.m_channelType = "B";
+-	if (m_circuit)
++	if (m_data.m_bri && m_circuit)
+ 	    m_data.m_channelSelect = lookup(m_circuit->code(),Q931Parser::s_dict_channelIDSelect_BRI);
+ 	if (!m_data.m_channelSelect) {
+ 	    Debug(q931(),DebugNote,"Call(%u,%u). No voice channel available [%p]",
+
+From 3020ff51edfd80bb5f386b63a2710b9f641d1e20 Mon Sep 17 00:00:00 2001
+From: Harald Welte <laforge@osmocom.org>
+Date: Fri, 4 Mar 2022 12:11:02 +0100
+Subject: [PATCH 2/5] preserve transfer-capability in Q.931 -> Q.931 calls
+
+This is important so udi/rdi doesn't get converted to speech.
+---
+ libs/ysig/q931.cpp          | 3 ++-
+ modules/server/ysigchan.cpp | 3 ++-
+ 2 files changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/libs/ysig/q931.cpp b/libs/ysig/q931.cpp
+index ffa404d7..a0afd527 100644
+--- a/libs/ysig/q931.cpp
++++ b/libs/ysig/q931.cpp
+@@ -1297,6 +1297,7 @@ SignallingEvent* ISDNQ931Call::processMsgSetup(ISDNQ931Message* msg)
+     msg->params().setParam("callednumtype",m_data.m_calledType);
+     msg->params().setParam("callednumplan",m_data.m_calledPlan);
+     msg->params().setParam("overlapped",String::boolText(m_overlap));
++    msg->params().setParam("transfer-cap",m_data.m_transferCapability);
+     return new SignallingEvent(SignallingEvent::NewCall,msg,this);
+ }
+ 
+@@ -1655,7 +1656,7 @@ bool ISDNQ931Call::sendSetup(SignallingMessage* sigMsg)
+ 	if (q931()->parserData().flag(ISDNQ931::ForceSendComplete))
+ 	    msg->appendSafe(new ISDNQ931IE(ISDNQ931IE::SendComplete));
+ 	// BearerCaps
+-	m_data.m_transferCapability = "speech";
++	m_data.m_transferCapability = sigMsg->params().getValue(YSTRING("transfer-cap"), "speech");
+ 	m_data.m_transferMode = "circuit";
+ 	m_data.m_transferRate = "64kbit";
+ 	m_data.m_format = sigMsg->params().getValue(YSTRING("format"),q931()->format());
+diff --git a/modules/server/ysigchan.cpp b/modules/server/ysigchan.cpp
+index 6ef2fd80..dcb79adc 100644
+--- a/modules/server/ysigchan.cpp
++++ b/modules/server/ysigchan.cpp
+@@ -1085,7 +1085,7 @@ SigChannel::SigChannel(SignallingEvent* event)
+     // call.preroute message
+     m_route = message("call.preroute",false,true);
+     // Parameters to be copied to call.preroute
+-    static String params = "caller,called,callername,format,formats,callernumtype,callernumplan,callerpres,callerscreening,callednumtype,callednumplan,inn,overlapped";
++    static String params = "caller,called,callername,format,formats,callernumtype,callernumplan,callerpres,callerscreening,callednumtype,callednumplan,inn,overlapped,transfer-cap";
+     plugin.copySigMsgParams(*m_route,event,&params);
+     if (m_route->getBoolValue("overlapped") && !m_route->getValue("called"))
+ 	m_route->setParam("called","off-hook");
+@@ -1237,6 +1237,7 @@ bool SigChannel::startCall(Message& msg, SigTrunk* trunk)
+     sigMsg->params().copyParam(msg,"callednumplan");
+     sigMsg->params().copyParam(msg,"inn");
+     sigMsg->params().copyParam(msg,"calledpointcode");
++    sigMsg->params().copyParam(msg,"transfer-cap");
+     // Copy RTP parameters
+     if (msg.getBoolValue("rtp_forward")) {
+ 	NamedList* tmp = new NamedList("rtp");
+
+From f727a1dd3a4e27b05cd27c0db3813cb6fd76986b Mon Sep 17 00:00:00 2001
+From: Harald Welte <laforge@osmocom.org>
+Date: Tue, 8 Mar 2022 13:04:00 +0100
+Subject: [PATCH 3/5] q931: If we're the network, channelID in SETUP ACK is
+ mandatory
+
+The user may suggest a given channel in the SETUP, but it's not legal
+for the network to return a non-mandatory ChannelID.
+
+See Q.931 Section 5.1.2 (B-channel selection - Originating):
+
+The selected B-channel is indicated in the Channel identification information
+element coded as "channel is indicated, no acceptable alternative" in the first
+message returned by the network in response to the SETUP message (i.e. a SETUP
+ACKNOWLEDGE or CALL PROCEEDING message)
+---
+ libs/ysig/q931.cpp | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/libs/ysig/q931.cpp b/libs/ysig/q931.cpp
+index a0afd527..decec80c 100644
+--- a/libs/ysig/q931.cpp
++++ b/libs/ysig/q931.cpp
+@@ -1749,6 +1749,8 @@ bool ISDNQ931Call::sendSetupAck()
+ 		Q931_CALL_ID,this);
+ 	    return sendReleaseComplete("congestion");
+ 	}
++	if (q931()->network())
++	    m_data.m_channelMandatory = true;
+ 	m_data.processChannelID(msg,true,&q931()->parserData());
+ 	m_channelIDSent = true;
+     }
+
+From 1b2e8db4fcf7f3ab82a2232626ad5e9c0d471a95 Mon Sep 17 00:00:00 2001
+From: Harald Welte <laforge@osmocom.org>
+Date: Mon, 17 Oct 2022 21:19:26 +0200
+Subject: [PATCH 4/5] q931: If we're the network, channelID in
+ ALERTING/CALL_PROC/CONNECT is mandatory
+
+The user may suggest a given channel in the SETUP, but it's not legal
+for the network to return a non-mandatory ChannelID.
+
+See Q.931 Section 5.1.2 (B-channel selection - Originating):
+
+The selected B-channel is indicated in the Channel identification information
+element coded as "channel is indicated, no acceptable alternative" in the first
+message returned by the network in response to the SETUP message (i.e. a SETUP
+ACKNOWLEDGE or CALL PROCEEDING message)
+
+In an earlier commit I had only fixed SETUP ACK, but missed that this is
+a more general problem that needs addressing in whatever is the first
+message containing a channelID yate sends in response to the SETUP.
+---
+ libs/ysig/q931.cpp | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/libs/ysig/q931.cpp b/libs/ysig/q931.cpp
+index decec80c..4607b4d8 100644
+--- a/libs/ysig/q931.cpp
++++ b/libs/ysig/q931.cpp
+@@ -1471,6 +1471,8 @@ bool ISDNQ931Call::sendAlerting(SignallingMessage* sigMsg)
+ 		return sendReleaseComplete("congestion");
+ 	    }
+ 	}
++	if (q931()->network())
++	    m_data.m_channelMandatory = true;
+ 	m_data.processChannelID(msg,true,&q931()->parserData());
+ 	m_channelIDSent = true;
+     }
+@@ -1491,6 +1493,8 @@ bool ISDNQ931Call::sendCallProceeding(SignallingMessage* sigMsg)
+ 	m_rspBearerCaps = false;
+     }
+     if (!m_channelIDSent) {
++	if (q931()->network())
++	    m_data.m_channelMandatory = true;
+ 	m_data.processChannelID(msg,true);
+ 	m_channelIDSent = true;
+     }
+@@ -1519,6 +1523,8 @@ bool ISDNQ931Call::sendConnect(SignallingMessage* sigMsg)
+ 	    m_data.m_channelByNumber = true;
+ 	    m_data.m_channelSelect = lookup(m_circuit->code(),Q931Parser::s_dict_channelIDSelect_BRI);
+ 	}
++	if (q931()->network())
++	    m_data.m_channelMandatory = true;
+ 	m_data.processChannelID(msg,true,&q931()->parserData());
+ 	m_channelIDSent = true;
+     }
+
+From e19f51b37651c034646eb6e0008c263a44998009 Mon Sep 17 00:00:00 2001
+From: Harald Welte <laforge@osmocom.org>
+Date: Sun, 3 Dec 2023 11:33:40 +0100
+Subject: [PATCH 5/5] processCalledNo: Fix typo / copy+paste error
+
+Surely, the treatment of the *called* party type/plan should
+not depend on the *calling* party type/plan.
+---
+ libs/ysig/q931.cpp | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/libs/ysig/q931.cpp b/libs/ysig/q931.cpp
+index 4607b4d8..386b0bdb 100644
+--- a/libs/ysig/q931.cpp
++++ b/libs/ysig/q931.cpp
+@@ -459,9 +459,9 @@ bool ISDNQ931IEData::processCalledNo(ISDNQ931Message* msg, bool add,
+     if (add) {
+ 	ISDNQ931IE* ie = new ISDNQ931IE(ISDNQ931IE::CalledNo);
+ 	ie->addParam("number",m_calledNo);
+-	if (!m_callerType.null())
++	if (!m_calledType.null())
+ 	    ie->addParam("type",m_calledType);
+-	if (!m_callerPlan.null())
++	if (!m_calledPlan.null())
+ 	    ie->addParam("plan",m_calledPlan);
+ 	msg->appendSafe(ie);
+ 	return true;

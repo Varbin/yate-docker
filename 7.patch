@@ -1,0 +1,66 @@
+From f68f4e2e039d88dfbac1364ba15cc86104cf615e Mon Sep 17 00:00:00 2001
+From: Manawyrm <git@tbspace.de>
+Date: Thu, 7 Sep 2023 01:44:54 +0200
+Subject: [PATCH 1/2] zapcard: use DAHDI_POLICY_WHEN_FULL for B-channel buffers
+
+---
+ modules/server/zapcard.cpp | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/modules/server/zapcard.cpp b/modules/server/zapcard.cpp
+index be9ac374..c33fe8c7 100644
+--- a/modules/server/zapcard.cpp
++++ b/modules/server/zapcard.cpp
+@@ -1114,6 +1114,17 @@ bool ZapDevice::open(unsigned int numbufs, unsigned int bufsize)
+ 		break;
+ 	    DDebug(m_owner,DebugAll,"%sBlock size set to %u on channel %u [%p]",
+ 		m_name.safe(),bufsize,m_channel,m_owner);
++
++            // B channels can use the WHEN_FULL policy (higher latency, less/no loss)
++            struct dahdi_bufferinfo bi;
++            bi.txbufpolicy = DAHDI_POLICY_WHEN_FULL;
++            bi.rxbufpolicy = DAHDI_POLICY_WHEN_FULL;
++            bi.numbufs = numbufs;
++            bi.bufsize = bufsize;
++            if (ioctl(SetBuffers,&bi))
++                DDebug(m_owner,DebugNote,"%snumbufs=%u bufsize=%u on channel %u [%p]",
++                    m_name.safe(),numbufs,bufsize,m_channel,m_owner);
++
+ 	    return true;
+ 	}
+ 
+@@ -1127,6 +1138,7 @@ bool ZapDevice::open(unsigned int numbufs, unsigned int bufsize)
+ 	}
+ 	// Set buffers
+ 	struct dahdi_bufferinfo bi;
++	// D channel needs to be run in IMMEDIATE mode
+ 	bi.txbufpolicy = DAHDI_POLICY_IMMEDIATE;
+ 	bi.rxbufpolicy = DAHDI_POLICY_IMMEDIATE;
+ 	bi.numbufs = numbufs;
+
+From d29ecc1a9b9bd3b67977963bc76a4c961d052ba2 Mon Sep 17 00:00:00 2001
+From: Manawyrm <git@tbspace.de>
+Date: Thu, 7 Sep 2023 13:01:40 +0200
+Subject: [PATCH 2/2] zapcard: ioctl SetAudioMode to false, ensuring a clear
+ data channel
+
+---
+ modules/server/zapcard.cpp | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/modules/server/zapcard.cpp b/modules/server/zapcard.cpp
+index c33fe8c7..ea8ff71e 100644
+--- a/modules/server/zapcard.cpp
++++ b/modules/server/zapcard.cpp
+@@ -1125,6 +1125,11 @@ bool ZapDevice::open(unsigned int numbufs, unsigned int bufsize)
+                 DDebug(m_owner,DebugNote,"%snumbufs=%u bufsize=%u on channel %u [%p]",
+                     m_name.safe(),numbufs,bufsize,m_channel,m_owner);
+ 
++            // Treat all B channels as clear data channels.
++            // No echo cancellation, no conferencing hacks, no volume control
++            int x = 0;
++            ioctl(SetAudioMode, &x);
++
+ 	    return true;
+ 	}
+ 

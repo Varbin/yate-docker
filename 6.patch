@@ -1,0 +1,117 @@
+From 7f8f4624b5f32cb1d9841b01366b901cb9f5a760 Mon Sep 17 00:00:00 2001
+From: Harald Welte <laforge@osmocom.org>
+Date: Sun, 11 Sep 2022 14:07:02 +0200
+Subject: [PATCH 1/2] iax: Support the new CALLINGANI2 IE
+
+This was introduced in Asterisk IAX2 in
+https://github.com/asterisk/asterisk/commit/3072c540bb2a4d128e97ef94d070696bf1348b5d
+---
+ libs/yiax/frame.cpp | 3 +++
+ libs/yiax/yateiax.h | 1 +
+ 2 files changed, 4 insertions(+)
+
+diff --git a/libs/yiax/frame.cpp b/libs/yiax/frame.cpp
+index ab63e130..8dc3c23d 100644
+--- a/libs/yiax/frame.cpp
++++ b/libs/yiax/frame.cpp
+@@ -224,6 +224,7 @@ const TokenDict IAXInfoElement::s_ieData[] = {
+     {"CALLTOKEN",         CALLTOKEN},
+     {"CAPABILITY2",       CAPABILITY2},
+     {"FORMAT2",           FORMAT2},
++    {"CALLINGANI2",       CALLINGANI2},
+     {0,0}
+ };
+ 
+@@ -455,6 +456,7 @@ bool IAXIEList::createFromFrame(const IAXFullFrame* frame, bool incoming)
+ 	    case IAXInfoElement::RR_PKTS:
+ 	    case IAXInfoElement::RR_DROPPED:
+ 	    case IAXInfoElement::RR_OOO:
++	    case IAXInfoElement::CALLINGANI2:
+ 		if (data[i] != 4) {
+ 		    i = 0xFFFF;
+ 		    break;
+@@ -683,6 +685,7 @@ void IAXIEList::toString(String& dest, const char* indent)
+ 	    case IAXInfoElement::RR_DROPPED:
+ 	    case IAXInfoElement::RR_OOO:
+ 	    case IAXInfoElement::RR_DELAY:
++	    case IAXInfoElement::CALLINGANI2:
+ 		dest << (unsigned int)((static_cast<IAXInfoElementNumeric*>(ie))->data());
+ 		break;
+ 	    case IAXInfoElement::TRANSFERID:
+diff --git a/libs/yiax/yateiax.h b/libs/yiax/yateiax.h
+index be9d091e..629456b3 100644
+--- a/libs/yiax/yateiax.h
++++ b/libs/yiax/yateiax.h
+@@ -158,6 +158,7 @@ class YIAX_API IAXInfoElement : public RefObject
+         CALLTOKEN = 0x36,        // BIN
+         CAPABILITY2 = 0x37,      // BIN		1 byte version + array
+         FORMAT2 = 0x38,          // BIN		1 byte version + array
++        CALLINGANI2 = 0x39,      // DW
+     };
+ 
+     /**
+
+From f0c8a0c5b079b059c06af9be34c4e8423ba5b34a Mon Sep 17 00:00:00 2001
+From: Harald Welte <laforge@osmocom.org>
+Date: Sun, 11 Sep 2022 14:11:57 +0200
+Subject: [PATCH 2/2] iax: ENCRYPTION IE is 2 bytes, not 1 byte
+
+yiax wrongly assumed that the ENCRYPTION IE is a single byte,
+while in reality it is 16bit / 2 bytes.
+
+It has been two bytes ever since it was introduced in Asterisk in 2004.
+
+This misunderstanding probably arose from RFC5456 which erroneosly
+states that the length of this IE is 0x01 while its body is 2 bytes
+long (See Section 8.6.34 at https://datatracker.ietf.org/doc/html/rfc5456)
+---
+ libs/yiax/frame.cpp | 8 +++++---
+ 1 file changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/libs/yiax/frame.cpp b/libs/yiax/frame.cpp
+index 8dc3c23d..eda7b4a2 100644
+--- a/libs/yiax/frame.cpp
++++ b/libs/yiax/frame.cpp
+@@ -476,6 +476,7 @@ bool IAXIEList::createFromFrame(const IAXFullFrame* frame, bool incoming)
+ 	    case IAXInfoElement::CALLINGTNS:
+ 	    case IAXInfoElement::FIRMWAREVER:
+ 	    case IAXInfoElement::RR_DELAY:
++	    case IAXInfoElement::ENCRYPTION:
+ 		if (data[i] != 2) {
+ 		    i = 0xFFFF;
+ 		    break;
+@@ -489,7 +490,6 @@ bool IAXIEList::createFromFrame(const IAXFullFrame* frame, bool incoming)
+ 	    case IAXInfoElement::CALLINGPRES:
+ 	    case IAXInfoElement::CALLINGTON:
+ 	    case IAXInfoElement::CAUSECODE:
+-	    case IAXInfoElement::ENCRYPTION:
+ 		if (data[i] != 1) {
+ 		    i = 0xFFFF;
+ 		    break;
+@@ -508,10 +508,12 @@ bool IAXIEList::createFromFrame(const IAXFullFrame* frame, bool incoming)
+ 		i += 1;
+ 		break;
+ 	    default:
+-		Debug(DebugInfo,"IAX Frame(%u,%u) with unknown IE identifier %u [%p]",
++		Debug(DebugWarn,"IAX Frame(%u,%u) with unknown IE identifier %u [%p]",
+ 		    frame->type(),frame->subclass(),data[i-1],frame);
+ 		appendBinary((IAXInfoElement::Type)data[i-1],data+i+1,data[i]);
+ 		i += data[i] + 1;
++		// unknown IEs are skipped by asterisk for future compatibility
++		break;
+ 	}
+ 	if (i == 0xFFFF)
+ 	    break;
+@@ -704,11 +706,11 @@ void IAXIEList::toString(String& dest, const char* indent)
+ 	    case IAXInfoElement::CALLINGTNS:		//TODO: print more data
+ 	    case IAXInfoElement::FIRMWAREVER:
+ 	    case IAXInfoElement::VERSION:
++	    case IAXInfoElement::ENCRYPTION:		//TODO: print more data
+ 		ie->toString(dest);
+ 		break;
+ 	    // 1 byte
+ 	    case IAXInfoElement::IAX_UNKNOWN:
+-	    case IAXInfoElement::ENCRYPTION:		//TODO: print more data
+ 		ie->toString(dest);
+ 		break;
+ 	    case IAXInfoElement::CALLINGPRES:

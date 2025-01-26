@@ -1,0 +1,38 @@
+From e496335c6c3c2e5520b728564bdadcb3eda33fcb Mon Sep 17 00:00:00 2001
+From: Harald Welte <laforge@osmocom.org>
+Date: Sun, 3 Dec 2023 16:19:41 +0100
+Subject: [PATCH] ISUP: support transfer capability interworking with Q.931
+
+A Q.931 call has the 'transfer-cap' attribute set to 'udi' for data
+calls.  The ISUP module must pick this up and encode it in the
+UseServiceInformation IE to preserve this vital information.  Inversely,
+a call arriving via ISUP must put its transfer-capability into the
+'transfer-cap' attribute, so that when it's routed to Q.931 it is
+preserved.
+
+Without this transfer-capability transparency, no UDI/RDI data calls
+or ISDN video calls can transition on the Q931/ISUP boundary
+
+See also https://github.com/yatevoip/yate/issues/12
+---
+ libs/ysig/isup.cpp | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/libs/ysig/isup.cpp b/libs/ysig/isup.cpp
+index f4189bc8..04e79980 100644
+--- a/libs/ysig/isup.cpp
++++ b/libs/ysig/isup.cpp
+@@ -2808,11 +2808,13 @@ bool SS7ISUPCall::copyParamIAM(SS7MsgISUP* msg, bool outgoing, SignallingMessage
+ 	param(dest,src,"CallingPartyNumber.complete","complete","true");
+ 	m_format = src.getValue(YSTRING("format"),isup()->format());
+ 	dest.setParam("UserServiceInformation",m_format);
++	param(dest,src,"UserServiceInformation.transfercap","transfer-cap","");
+ 	return true;
+     }
+     // Incoming call
+     m_format = dest.getValue(YSTRING("UserServiceInformation"),isup()->format());
+     dest.setParam("format",m_format);
++    dest.setParam("transfer-cap",dest.getValue(YSTRING("UserServiceInformation.transfercap")));
+     dest.setParam("caller",dest.getValue(YSTRING("CallingPartyNumber")));
+     //dest.setParam("callername",dest.getValue(""));
+     dest.setParam("callernumtype",dest.getValue(YSTRING("CallingPartyNumber.nature")));
