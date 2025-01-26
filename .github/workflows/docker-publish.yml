@@ -93,9 +93,9 @@ jobs:
         run: |
           set -e -x
           tags=$(docker run --rm -it ghcr.io/varbin/yate yate --version 2>&1 | cut -d ' ' -f2,4 | tr ' ' '\n' | tr -d 'r')
-          for $tag in $tags latest; do
+          for tag in $tags latest; do
             echo $tag
-            for $container in $containers; do
+            for container in $containers; do
               echo $container
               image=$(echo $container | cut -d ':' -f 1)
               docker tag $container $image:$tag
