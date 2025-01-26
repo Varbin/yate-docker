@@ -90,14 +90,17 @@ jobs:
       - name: push
         if: github.event_name != 'pull_request'
         env:
-          digest: ${{ steps.build-and-push.outputs.digest }}
+          DIGEST: ${{ steps.build-and-push.outputs.digest }}
         run: |
-          set -e
+          set -e          
           for tag in $DOCKER_METADATA_OUTPUT_TAGS; do
-              docker run --rm $tag yate --version
-              versions=$(docker run --rm $tag yate --version 2>&1 | cut -d ' ' -f2,4 | tr ' ' '\n' | tr -d 'r')    
+              all_versions=$(docker run --rm $tag yate --version 2>&1 | cut -d ' ' -f2,3,4)
+              semantic=$(echo $all_versions | cut -d ' ' -f 1)
+              major=$(echo $semantic | cut -d '.' -f 1)
+              release=$(echo $all_versions | cut -d ' ' -f 2)
+              commit=$(echo $all_versions | cut -d ' ' -f 3 | tr -d 'r')
               image=$(echo $tag | cut -d ':' -f 1)
-              for version in $versions latest; do
+              for version in $major $semantic "${semantic}.$release" $commit latest; do
                 echo $image:$version
                 docker tag $tag $image:$version
                 docker push $image:$version
