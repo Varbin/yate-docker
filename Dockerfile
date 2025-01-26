@@ -54,14 +54,14 @@ RUN apt-get update && apt-get install -y \
     --no-install-recommends && rm -rf /var/lib/apt/lists/*
 COPY --from=yate-build /usr/local/ /usr/local
 ENV LD_LIBRARY_PATH=/usr/local/lib
-CMD ["/usr/local/bin/yate", "-vv"]
+CMD ["/usr/local/bin/yate"]
 
 # Depending on your configuration, you may not need all ports or even more.
 #
-#      IAX      SIP               SIP (TLS) H.323    S(RTP)
-EXPOSE 4569/udp 5060/udp 5060/tcp 5061/tcp  1719/udp 16384-32768/udp \
-       161/udp 2427/udp
-#      SNMP    MGCP
+#      IAX      SIP               SIP (TLS) H.323
+EXPOSE 4569/udp 5060/udp 5060/tcp 5061/tcp  1719/udp 1719/tcp 1720/tcp \
+       16384-32768/udp 161/udp 2427/udp
+#      S(RTP)          SNMP    MGCP
 
 LABEL \
     org.opencontainers.image.title="Yate" \
