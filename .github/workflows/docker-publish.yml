@@ -90,15 +90,14 @@ jobs:
         if: github.event_name != 'pull_request'
         run: |
           set -e
-          docker run --rm ${IMAGE_NAME}:trunk yate --version
-          versions=$(docker run --rm ${IMAGE_NAME}:trunk yate --version 2>&1 | cut -d ' ' -f2,4 | tr ' ' '\n' | tr -d 'r')
-          for version in $versions latest; do
-            echo $version
-            for tag in $DOCKER_METADATA_OUTPUT_TAGS; do
-              echo $tag
+          for tag in $DOCKER_METADATA_OUTPUT_TAGS; do
+              docker run --rm $tag yate --version
+              versions=$(docker run --rm $tag yate --version 2>&1 | cut -d ' ' -f2,4 | tr ' ' '\n' | tr -d 'r')    
               image=$(echo $tag | cut -d ':' -f 1)
-              docker tag $container $image:$version
-              docker push $image:$version
+              for version in $versions latest; do
+                docker tag $tag $image:$version
+                docker push $image:$version
+              done
             done
           done
 
