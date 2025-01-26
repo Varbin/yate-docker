@@ -91,6 +91,7 @@ jobs:
         run: |
           set -e
           for tag in $DOCKER_METADATA_OUTPUT_TAGS; do
+              docker run --rm $tag yate --version
               versions=$(docker run --rm $tag yate --version 2>&1 | cut -d ' ' -f2,4 | tr ' ' '\n' | tr -d 'r')    
               image=$(echo $tag | cut -d ':' -f 1)
               for version in $versions latest; do
