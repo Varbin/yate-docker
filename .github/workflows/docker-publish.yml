@@ -88,18 +88,16 @@ jobs:
       # Push with name and hash from container
       - name: push
         if: github.event_name != 'pull_request'
-        env:
-          containers: ${{ steps.meta.output.tags }}
         run: |
-          set -e -x
-          tags=$(docker run --rm -it ghcr.io/varbin/yate yate --version 2>&1 | cut -d ' ' -f2,4 | tr ' ' '\n' | tr -d 'r')
-          for tag in $tags latest; do
-            echo $tag
-            for container in $containers; do
-              echo $container
-              image=$(echo $container | cut -d ':' -f 1)
-              docker tag $container $image:$tag
-              docker push $image:$tag
+          set -e
+          versions=$(docker run --rm ghcr.io/varbin/yate yate --version 2>&1 | cut -d ' ' -f2,4 | tr ' ' '\n' | tr -d 'r')
+          for version in $versions latest; do
+            echo $version
+            for tag in $DOCKER_METADATA_OUTPUT_TAGS; do
+              echo $tag
+              image=$(echo $tag | cut -d ':' -f 1)
+              docker tag $container $image:$version
+              docker push $image:$version
             done
           done
 
