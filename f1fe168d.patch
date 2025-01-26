@@ -1,0 +1,98 @@
+From f1fe168dbdc73d2cee15745cc0d82447ef82f828 Mon Sep 17 00:00:00 2001
+From: Manawyrm <git@tbspace.de>
+Date: Sun, 8 Oct 2023 16:44:07 +0000
+Subject: [PATCH] amrnbcodec/efrcodec: switch from ETSI amrnb to
+ libopencore-amrnb
+
+---
+ configure.ac           |  8 ++++----
+ modules/amrnbcodec.cpp | 17 +++++++++++++----
+ modules/efrcodec.cpp   | 17 +++++++++++++----
+ 3 files changed, 30 insertions(+), 12 deletions(-)
+
+diff --git a/configure.ac b/configure.ac
+index 7199ba79..bbb46af0 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -1204,7 +1204,7 @@ AC_SUBST(SPEEX_LIB)
+ 
+ HAVE_AMRNB=no
+ AMRNB_INC=""
+-AMRNB_LIB="-lamrnb"
++AMRNB_LIB="-lopencore-amrnb"
+ AC_ARG_WITH(amrnb,AC_HELP_STRING([--with-amrnb=DIR],[use AMR-NB if available (default)]),[ac_cv_use_amrnb=$withval],[ac_cv_use_amrnb=/usr])
+ if [[ "x$ac_cv_use_amrnb" = "xstatic" ]]; then
+     ac_cv_use_amrnb=/usr
+@@ -1213,9 +1213,9 @@ fi
+ if [[ "x$ac_cv_use_amrnb" != "xno" ]]; then
+ AC_MSG_CHECKING([for AMR-NB in $ac_cv_use_amrnb])
+ local_lib="$ARCHLIB"
+-amrinc="$ac_cv_use_amrnb/include/amrnb"
+-test -f "$ac_cv_use_amrnb/$local_lib/libamrnb.so" || local_lib="lib"
+-if [[ -f "$ac_cv_use_amrnb/$local_lib/libamrnb.so" -a -f "$amrinc/interf_rom.h" ]]; then
++amrinc="$ac_cv_use_amrnb/include/opencore-amrnb"
++test -f "$ac_cv_use_amrnb/$local_lib/libopencore-amrnb.so" || local_lib="lib"
++if [[ -f "$ac_cv_use_amrnb/$local_lib/libopencore-amrnb.so" -a -f "$amrinc/interf_dec.h" ]]; then
+     HAVE_AMRNB=yes
+     AMRNB_LIB="-L$ac_cv_use_amrnb/$local_lib $AMRNB_LIB"
+     AMRNB_INC="-I$amrinc"
+diff --git a/modules/amrnbcodec.cpp b/modules/amrnbcodec.cpp
+index 0b2dbf00..8ee13f45 100644
+--- a/modules/amrnbcodec.cpp
++++ b/modules/amrnbcodec.cpp
+@@ -25,12 +25,21 @@
+ #include <yatephone.h>
+ 
+ extern "C" {
+-#include <interf_enc.h>
+-#include <interf_dec.h>
++#include <opencore-amrnb/interf_enc.h>
++#include <opencore-amrnb/interf_dec.h>
+ }
+ namespace RxTypes {
+-// There is a conflict between encoder and decoder so insulate in a namespace
+-#include <sp_dec.h>
++	/* Declaration recieved frame types */
++	enum RXFrameType { RX_SPEECH_GOOD = 0,
++	                   RX_SPEECH_DEGRADED,
++	                   RX_ONSET,
++	                   RX_SPEECH_BAD,
++	                   RX_SID_FIRST,
++	                   RX_SID_UPDATE,
++	                   RX_SID_BAD,
++	                   RX_NO_DATA,
++	                   RX_N_FRAMETYPES     /* number of frame types */
++	};
+ };
+ 
+ // IF1/GP3 is Bandwidth-Efficient Mode
+diff --git a/modules/efrcodec.cpp b/modules/efrcodec.cpp
+index a72fc612..d921a4f3 100644
+--- a/modules/efrcodec.cpp
++++ b/modules/efrcodec.cpp
+@@ -26,12 +26,21 @@
+ #include <yatephone.h>
+ 
+ extern "C" {
+-#include <interf_enc.h>
+-#include <interf_dec.h>
++#include <opencore-amrnb/interf_enc.h>
++#include <opencore-amrnb/interf_dec.h>
+ }
+ namespace RxTypes {
+-// There is a conflict between encoder and decoder so insulate in a namespace
+-#include <sp_dec.h>
++    /* Declaration recieved frame types */
++    enum RXFrameType { RX_SPEECH_GOOD = 0,
++                       RX_SPEECH_DEGRADED,
++                       RX_ONSET,
++                       RX_SPEECH_BAD,
++                       RX_SID_FIRST,
++                       RX_SID_UPDATE,
++                       RX_SID_BAD,
++                       RX_NO_DATA,
++                       RX_N_FRAMETYPES     /* number of frame types */
++    };
+ };
+ 
+ using namespace TelEngine;
