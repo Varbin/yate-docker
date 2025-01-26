@@ -4,7 +4,9 @@ RUN apt-get update && apt-get install -y  \
     git build-essential yacc bison yasm flex pkg-config unzip tar autoconf patch doxygen \
     default-libmysqlclient-dev libpq-dev libsqlite3-dev libexpat-dev \
     libopus-dev libtheora-dev libspeex-dev libopencore-amrnb-dev libogg-dev libx264-dev libgsm1-dev libopencore-amrnb-dev libtiff-dev \
-    libasound2-dev libsctp-dev libcapi20-dev dahdi-source libusb-1.0-0-dev
+    libasound2-dev libsctp-dev libcapi20-dev dahdi-source libusb-1.0-0-dev \
+    ca-certificates \
+    --no-install-recommends
 WORKDIR /usr/src
 
 FROM buildenv AS celt
@@ -37,7 +39,7 @@ RUN unzip v* && cd h323plus-* && ./configure --enable-h460p  --enable-h460pre  -
 FROM buildenv AS yate-build
 COPY --from=openh323 /usr/local/ /usr/local
 RUN git clone --depth 1 https://github.com/yatevoip/yate
-ADD *.patch /usr/src/yate
+ADD patch/*.patch /usr/src/yate
 RUN set -e -x; cd yate && for patch in *.patch ; do \
       patch --strip=1 -i "$patch"; \
     done
@@ -46,9 +48,10 @@ RUN cd yate && ./autogen.sh && ./configure && make -j$(nproc) && make install
 FROM debian:12-slim
 RUN apt-get update && apt-get install -y \
     libmariadb3 libpq5 libsqlite3-0 libexpat1 libssl3 \
-    libopus0 libtheora0 libspeex1 libopencore-amrnb0 libogg0 libx264-164 libgsm1 libopencore-amrnb0 libtiff  \
+    libopus0 libtheora0 libspeex1 libopencore-amrnb0 libogg0 libx264-164 libgsm1 libopencore-amrnb0 libtiff6  \
     libasound2 libsctp1 libcapi20-3 libusb-1.0-0 \
-    telnet ca-certificates
+    telnet ca-certificates \
+    --no-install-recommends
 COPY --from=yate-build /usr/local/ /usr/local
 ENV LD_LIBRARY_PATH=/usr/local/lib
 CMD ["/usr/local/bin/yate", "-vv"]
