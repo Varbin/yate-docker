@@ -1,0 +1,124 @@
+From 519a95929f556d8442a83952733c4ef9001cd630 Mon Sep 17 00:00:00 2001
+From: Martin Lang <Martin.Lang@rwth-aachen.de>
+Date: Tue, 8 Dec 2020 21:43:27 +0100
+Subject: [PATCH 1/2] callfork: Fix error propagation
+
+If all fork children fail before any channel can
+be created, the fork will always fail with error code
+500. However, we can have such a situation because
+all participants are offline and the routing returns
+the respective error code.
+
+In order to mitigate this, we update the error code
+of the call.execute message of the fork. So, in the case
+that all children fail before any channel can be established,
+the caller will see the error code of the last child.
+In an all-offline scenario this would be 404.
+---
+ modules/callfork.cpp | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/modules/callfork.cpp b/modules/callfork.cpp
+index e68466c4..8df84fef 100644
+--- a/modules/callfork.cpp
++++ b/modules/callfork.cpp
+@@ -323,6 +323,8 @@ bool ForkMaster::forkSlave(String* dest)
+ 	    Debug(this,DebugAll,"Call '%s' target '%s' slave '%s' execute succeeded with no peer [%p]",
+ 		getPeerId().c_str(),dest->c_str(),tmp.c_str(),this);
+ 	ok = false;
++	// error propagation via lostMaster() does not work in this case. No channel was created, hence no messages are created
++	m_exec->setParam("error", error);
+ 	slave->lostMaster(error);
+     }
+     slave->deref();
+
+From e19fff778d97f798d9040f933e7d04c84b2a2ca1 Mon Sep 17 00:00:00 2001
+From: Martin Lang <Martin.Lang@rwth-aachen.de>
+Date: Tue, 8 Dec 2020 22:43:28 +0100
+Subject: [PATCH 2/2] Callfork: Inconsistent group progression
+
+Callforks support three types of call legs:
+- regular
+- auxiliar
+- persistent
+
+These different types change the behavior of how groups progress.
+If no regular calls are left in a group, the fork progresses
+immediately to the next group, drops all auxiliar children and keeps
+the persistent ones. However, there is inconsistent behavior depending
+on whether the creation of a call leg is successful or not.
+
+Currently, the check if there are regular calls left in the current
+group is only implemented in lostSlave(). So, if you have a group
+with one persistent member (ringback) and one regular member, you can
+observe different behavior in the case that routing for the member fails
+and in the situation that the call is started but then rejected on a remote
+end.
+
+If the regular member is remote, forkSlave() will succeed and initiate a sip
+call. The callContinue() function will return. Then, the sip call might fail
+because the remote member is offline. Now lostSlave() is called, the module
+detects that this was the last regular member and immediately progresses
+to the next group.
+
+If the regular member, however, is local, the routing knows that the member
+is offline and fails. In this case forkSlave() will fail. Nonetheless, forks = 1
+because creation of the persistent slave (ringback) was succesful. Consequently,
+the call continues but it is ringing nowhere. In case that the next group is timed,
+the caller will just hear the ringback for a while. If the next group isn't timed
+but expected to progress if all calls in the current group have failed, the call
+is actually stuck and the caller will hear the ringback indefinately while it is
+nowhere ringing.
+
+This patch fixes this behavior by checking if regular call legs are active before
+returning from callContinue(). If this isn't the case, it will trigger progression
+to the next group immediately.
+---
+ modules/callfork.cpp | 27 +++++++++++++++++++++++++--
+ 1 file changed, 25 insertions(+), 2 deletions(-)
+
+diff --git a/modules/callfork.cpp b/modules/callfork.cpp
+index 8df84fef..eb414bff 100644
+--- a/modules/callfork.cpp
++++ b/modules/callfork.cpp
+@@ -366,6 +366,7 @@ bool ForkMaster::startCalling(Message& msg)
+     m_rtpForward = msg.getBoolValue("rtp_forward");
+     m_rtpStrict = msg.getBoolValue("rtpstrict");
+     if (!callContinue()) {
++	Debug(&__plugin,DebugNote,"Fork '%s' startCalling() failed. No successful peers", id().c_str());
+ 	const char* err = m_exec->getValue("reason");
+ 	if (err)
+ 	    msg.setParam("reason",err);
+@@ -430,8 +431,30 @@ bool ForkMaster::callContinue()
+ 			getPeerId().c_str(),dest->c_str(),this);
+ 	    }
+ 	    dest->destruct();
+-	    if (forks)
+-		break;
++	    if (forks) {
++		unsigned int regulars = 0;
++		unsigned int auxiliars = 0;
++		unsigned int persistents = 0;
++		for (ObjList* l = m_slaves.skipNull(); l; l = l->skipNext()) {
++		    switch (static_cast<const ForkSlave*>(l->get())->type()) {
++			case ForkSlave::Auxiliar:
++			    auxiliars++;
++			    break;
++			case ForkSlave::Persistent:
++			    persistents++;
++			    break;
++			default:
++			    regulars++;
++			    break;
++		    }
++		}
++		if (regulars > 0) {
++		    break;
++		} else {
++		    clear(true);
++		    forks = persistents;
++		}
++	    }
+ 	    m_timer = 0;
+ 	    m_timerDrop = false;
+ 	    continue;
