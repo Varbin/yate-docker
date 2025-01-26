@@ -90,6 +90,7 @@ jobs:
         if: github.event_name != 'pull_request'
         run: |
           set -e
+          docker run --rm ghcr.io/varbin/yate yate --version
           versions=$(docker run --rm ghcr.io/varbin/yate yate --version 2>&1 | cut -d ' ' -f2,4 | tr ' ' '\n' | tr -d 'r')
           for version in $versions latest; do
             echo $version
