@@ -1,4 +1,4 @@
-FROM debian:12-slim AS buildenv
+FROM debian:12-slim@sha256:f70dc8d6a8b6a06824c92471a1a258030836b26b043881358b967bf73de7c5ab AS buildenv
 # Prepare a common build environment. It will be exted if needed.
 RUN apt-get update && apt-get install -y  \
     git build-essential yacc bison yasm flex pkg-config unzip tar autoconf patch doxygen \
@@ -45,7 +45,7 @@ RUN set -e -x; cd yate && for patch in *.patch ; do \
     done
 RUN cd yate && ./autogen.sh && ./configure && make -j$(nproc) && make install
 
-FROM debian:12-slim
+FROM debian:12-slim@sha256:f70dc8d6a8b6a06824c92471a1a258030836b26b043881358b967bf73de7c5ab
 RUN apt-get update && apt-get install -y \
     libmariadb3 libpq5 libsqlite3-0 libexpat1 libssl3 \
     libopus0 libtheora0 libspeex1 libopencore-amrnb0 libogg0 libx264-164 libgsm1 libopencore-amrnb0 libtiff6  \
@@ -68,4 +68,3 @@ LABEL \
     org.opencontainers.image.source=https://github.com/varbin/yate-docker \
     org.opencontainers.image.description="Yet another telephony exchange in a box." \
     org.opencontainers.image.licenses="GPL-2.0"
-
