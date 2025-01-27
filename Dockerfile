@@ -17,10 +17,9 @@ FROM buildenv AS ptlib
 ADD --checksum=sha256:22653cbb7d94ceafea35a9eb0f8f96afe8f0ffc8cd4cb08ce00d6c62d5e11bb8 https://github.com/willamowius/ptlib/archive/v2_10_9_6.tar.gz /usr/src
 RUN tar xf v*.tar.gz && cd ptlib-* && ./configure --prefix=/usr/local && make -j$(nproc) && make install
 
-# Yate needs an old version of spandsp...
 FROM buildenv AS spandsp
-ADD --checksum=sha256:cef7139c6076dcd1b7efd6ab49eaf318cb86d9217d8d137a7f461875c9b78922 https://www.soft-switch.org/downloads/spandsp/old/spandsp-0.0.6pre16.tgz /usr/src
-RUN tar xf spandsp-*.tgz && cd spandsp-* && ./configure && make -j$(nproc) && make install
+ADD --checksum=sha256:cc053ac67e8ac4bb992f258fd94f275a7872df959f6a87763965feabfdcc9465 https://www.soft-switch.org/downloads/spandsp/spandsp-0.0.6.tar.gz /usr/src
+RUN tar xf spandsp-*.tar.gz && cd spandsp-* && ./configure && make -j$(nproc) && make install
 
 # 'Someone' has to write a patch for modern ffmpeg version to h323+
 # Also, I can't compile outdated ffmpeg with modern libh264 oder libx264...
