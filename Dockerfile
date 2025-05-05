@@ -1,4 +1,4 @@
-FROM debian:12-slim@sha256:b1211f6d19afd012477bd34fdcabb6b663d680e0f4b0537da6e6b0fd057a3ec3 AS buildenv
+FROM debian:12-slim@sha256:4b50eb66f977b4062683ff434ef18ac191da862dbe966961bc11990cf5791a8d AS buildenv
 # Prepare a common build environment. It will be exted if needed.
 RUN apt-get update && apt-get install -y  \
     git build-essential yacc bison yasm flex pkg-config unzip tar autoconf patch doxygen \
@@ -44,7 +44,7 @@ RUN set -e -x; cd yate && for patch in *.patch ; do \
     done
 RUN cd yate && ./autogen.sh && ./configure && make -j$(nproc) && make install
 
-FROM debian:12-slim@sha256:b1211f6d19afd012477bd34fdcabb6b663d680e0f4b0537da6e6b0fd057a3ec3
+FROM debian:12-slim@sha256:4b50eb66f977b4062683ff434ef18ac191da862dbe966961bc11990cf5791a8d
 RUN apt-get update && apt-get install -y \
     libmariadb3 libpq5 libsqlite3-0 libexpat1 libssl3 \
     libopus0 libtheora0 libspeex1 libopencore-amrnb0 libogg0 libx264-164 libgsm1 libopencore-amrnb0 libtiff6  \
